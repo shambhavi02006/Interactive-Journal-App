@@ -3,18 +3,31 @@ import express from "express";
 import path from "path";
 import { createServer as createViteServer } from "vite";
 import { GoogleGenAI } from "@google/genai";
-import { initializeApp } from "firebase-admin/app";
+import { initializeApp, getApps } from "firebase-admin/app";
 import { getAuth } from "firebase-admin/auth";
 
-// Initialize Firebase Admin (for verifying ID tokens)
-initializeApp({
-  projectId: "gen-lang-client-0935227418",
-});
+// Initialize Firebase Admin safely for Vercel serverless cold starts
+if (!getApps().length) {
+  initializeApp({
+    projectId: "gen-lang-client-0935227418",
+  });
+}
 
 const app = express();
 const PORT = 3000;
 
 app.use(express.json());
+
+// Enable CORS for Vercel deployment
+app.use((req, res, next) => {
+  res.header("Access-Control-Allow-Origin", "*");
+  res.header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept, Authorization");
+  if (req.method === "OPTIONS") {
+    res.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
+    return res.status(200).json({});
+  }
+  next();
+});
 
 // Helper for Gemini
 let ai: GoogleGenAI | null = null;
@@ -28,7 +41,7 @@ function getGenAI() {
   return ai;
 }
 
-// Middleware to verify Firebase ID token (with resilient guest fallback for local dev)
+// Middleware to verify Firebase ID token (with resilient guest fallback for local dev & Vercel)
 const authenticateUser = async (req: express.Request, res: express.Response, next: express.NextFunction) => {
   const authHeader = req.headers.authorization;
   if (!authHeader || !authHeader.startsWith("Bearer ")) {
@@ -73,7 +86,7 @@ async function generateWithFallback(contents: any[], systemInstruction: string) 
   throw lastError || new Error("Gemini AI service unavailable");
 }
 
-app.post("/api/chat", authenticateUser, async (req, res) => {
+app.post(["/api/chat", "/chat"], authenticateUser, async (req, res) => {
   try {
     const { message, history } = req.body;
     if (!message) {
@@ -95,7 +108,7 @@ Respond like a warm, supportive human companion: acknowledge their feelings, val
 Return strictly a valid JSON object with the following keys:
 - "reply": string (your empathetic, warm conversational response)
 - "detectedEmotion": string (1-2 word mood/emotion label, e.g. "Hopeful", "Anxious", "Heartbroken", "Joyful", "Reflective")
-- "emotionEmoji": string (a single fitting emoji, e.g. "🌱", "🌧️", "☀️", "🌊", "🩹", "✨", "🔥")
+- "emotionEmoji": string (a single fitting emoji, e.g. "🌱", "🌧️", "☀️", "OCEAN", "🩹", "✨", "🔥")
 - "suggestedTitle": string (a short 2-4 word reflective title for this journal entry)
 Do not include markdown formatting outside the JSON object.`;
 
@@ -116,7 +129,7 @@ Do not include markdown formatting outside the JSON object.`;
   }
 });
 
-app.post("/api/music", authenticateUser, async (req, res) => {
+app.post(["/api/music", "/music"], authenticateUser, async (req, res) => {
   try {
     const { history, mood } = req.body;
     
