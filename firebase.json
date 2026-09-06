@@ -1,0 +1,8 @@
+{
+  "firestore": {
+    "databaseId": "ai-studio-journalapp-edfaf991-62e1-42e6-9312-25ddbe475c57",
+    "rules": "firestore.rules",
+    "edition": "ENTERPRISE",
+    "dataAccessMode": "FIRESTORE_NATIVE"
+  }
+}
