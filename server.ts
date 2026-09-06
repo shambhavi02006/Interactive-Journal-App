@@ -14,7 +14,7 @@ if (!getApps().length) {
 }
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = Number(process.env.PORT) || 3000;
 
 app.use(express.json());
 
@@ -86,21 +86,47 @@ async function generateWithFallback(contents: any[], systemInstruction: string) 
   throw lastError || new Error("Gemini AI service unavailable");
 }
 
+function formatContentsForGemini(rawHistory: any[], currentMessage: string) {
+  const contents: Array<{ role: 'user' | 'model'; parts: Array<{ text: string }> }> = [];
+  
+  if (Array.isArray(rawHistory)) {
+    for (const msg of rawHistory) {
+      if (!msg || !msg.text || typeof msg.text !== 'string' || !msg.text.trim()) continue;
+      const role: 'user' | 'model' = msg.role === 'user' ? 'user' : 'model';
+      
+      // Merge consecutive identical roles to adhere strictly to Gemini API alternating requirements
+      if (contents.length > 0 && contents[contents.length - 1].role === role) {
+        contents[contents.length - 1].parts[0].text += `\n${msg.text.trim()}`;
+      } else {
+        contents.push({ role, parts: [{ text: msg.text.trim() }] });
+      }
+    }
+  }
+
+  // Ensure conversation starts with 'user'
+  while (contents.length > 0 && contents[0].role !== 'user') {
+    contents.shift();
+  }
+
+  // Append current user message
+  if (contents.length > 0 && contents[contents.length - 1].role === 'user') {
+    contents[contents.length - 1].parts[0].text += `\n${currentMessage.trim()}`;
+  } else {
+    contents.push({ role: 'user', parts: [{ text: currentMessage.trim() }] });
+  }
+
+  return contents;
+}
+
 app.post(["/api/chat", "/chat"], authenticateUser, async (req, res) => {
   try {
-    const { message, history } = req.body;
-    if (!message) {
+    const { message, history } = req.body || {};
+    if (!message || typeof message !== 'string' || !message.trim()) {
       res.status(400).json({ error: "Message is required" });
       return;
     }
 
-    const contents = [];
-    if (history && Array.isArray(history)) {
-       for (const msg of history) {
-          contents.push({ role: msg.role === 'user' ? 'user' : 'model', parts: [{ text: msg.text }] });
-       }
-    }
-    contents.push({ role: 'user', parts: [{ text: message }] });
+    const contents = formatContentsForGemini(history, message);
 
     const systemInstruction = `You are Aether, an empathetic, intuitive, and deeply thoughtful AI journaling companion.
 Analyze the user's entry for their underlying emotions (e.g. sad, happy, anxious, angry, nervous, peaceful, hopeful, overwhelmed, etc.).
@@ -108,24 +134,46 @@ Respond like a warm, supportive human companion: acknowledge their feelings, val
 Return strictly a valid JSON object with the following keys:
 - "reply": string (your empathetic, warm conversational response)
 - "detectedEmotion": string (1-2 word mood/emotion label, e.g. "Hopeful", "Anxious", "Heartbroken", "Joyful", "Reflective")
-- "emotionEmoji": string (a single fitting emoji, e.g. "🌱", "🌧️", "☀️", "OCEAN", "🩹", "✨", "🔥")
+- "emotionEmoji": string (a single fitting emoji, e.g. "🌱", "🌧️", "☀️", "🌊", "🩹", "✨", "🔥")
 - "suggestedTitle": string (a short 2-4 word reflective title for this journal entry)
 Do not include markdown formatting outside the JSON object.`;
 
-    const aiResponseText = await generateWithFallback(contents, systemInstruction);
+    let aiResponseText = "";
+    try {
+      aiResponseText = await generateWithFallback(contents, systemInstruction);
+    } catch (e) {
+      console.warn("Gemini generation notice (using supportive fallback reply):", e);
+      aiResponseText = JSON.stringify({
+        reply: `Thank you for sharing that with me. It takes courage to open up about how you are feeling. What feels like the most important part of this for you right now?`,
+        detectedEmotion: "Reflective",
+        emotionEmoji: "🌿",
+        suggestedTitle: "Personal Reflection"
+      });
+    }
 
     let parsed = { reply: aiResponseText, detectedEmotion: "Reflective", emotionEmoji: "✨", suggestedTitle: "Journal Reflection" };
     try {
       const cleaned = aiResponseText.replace(/```json/g, '').replace(/```/g, '').trim();
       parsed = JSON.parse(cleaned);
     } catch (e) {
-      console.warn("Could not parse JSON from Gemini response, using fallback format");
+      console.warn("Could not parse JSON from Gemini response, using formatted reply");
+      parsed = {
+        reply: aiResponseText,
+        detectedEmotion: "Reflective",
+        emotionEmoji: "🌿",
+        suggestedTitle: "Personal Reflection"
+      };
     }
 
     res.json(parsed);
   } catch (error) {
-    console.error("Gemini API error:", error);
-    res.status(500).json({ error: "Failed to generate content" });
+    console.error("Chat API error handler:", error);
+    res.json({
+      reply: "Thank you for sharing your thoughts with me. I am here listening and walking through this reflection with you. How are you feeling overall right now?",
+      detectedEmotion: "Supportive",
+      emotionEmoji: "💙",
+      suggestedTitle: "Mindful Reflection"
+    });
   }
 });
 
