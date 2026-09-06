@@ -199,7 +199,7 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
           'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify({
-          history: currentEntry.messages,
+          history: updatedMessages,
           mood: selectedMood
         })
       });
