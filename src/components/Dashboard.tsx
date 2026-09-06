@@ -207,8 +207,8 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
       if (!res.ok) throw new Error('API Error');
       const data = await res.json();
 
-      let musicData = undefined;
-      if (data.searchData) {
+      let musicData = data.musicData || undefined;
+      if (!musicData && data.searchData) {
         try {
           const itunesRes = await fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(data.searchData.songName + ' ' + data.searchData.artistName)}&entity=song&limit=1`);
           if (itunesRes.ok) {
@@ -282,8 +282,8 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
       if (!res.ok) throw new Error('API Error');
       const data = await res.json();
 
-      let musicData = undefined;
-      if (data.searchData) {
+      let musicData = data.musicData || undefined;
+      if (!musicData && data.searchData) {
         try {
           const itunesRes = await fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(data.searchData.songName + ' ' + data.searchData.artistName)}&entity=song&limit=1`);
           if (itunesRes.ok) {

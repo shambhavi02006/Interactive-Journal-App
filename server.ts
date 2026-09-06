@@ -167,9 +167,30 @@ No markdown formatting outside JSON.`;
       console.warn("Failed to parse music JSON");
     }
 
+    let musicData = undefined;
+    try {
+      const searchTerm = encodeURIComponent(`${result.songName} ${result.artistName}`);
+      const itunesRes = await fetch(`https://itunes.apple.com/search?term=${searchTerm}&entity=song&limit=1`);
+      if (itunesRes.ok) {
+        const itunesJson = await itunesRes.json();
+        if (itunesJson.results && itunesJson.results.length > 0) {
+          const track = itunesJson.results[0];
+          musicData = {
+            previewUrl: track.previewUrl,
+            trackName: track.trackName,
+            artistName: track.artistName,
+            artworkUrl: track.artworkUrl100
+          };
+        }
+      }
+    } catch (e) {
+      console.warn("iTunes API search warning:", e);
+    }
+
     res.json({
       reply: `🎵 **${result.songName}** by **${result.artistName}**\n\n${result.explanation}`,
       searchData: result,
+      musicData,
       detectedEmotion: result.detectedEmotion || mood || "Reflective",
       emotionEmoji: result.emotionEmoji || "🎵"
     });
