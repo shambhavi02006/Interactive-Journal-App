@@ -38,7 +38,7 @@ Mindful Journal helps users reflect on their thoughts, feelings, and daily exper
 
 1. **Clone the repository**:
    ```bash
-   git clone https://github.com/shambhavi02006/Interactive-Journal-App.git
+   git clone https://github.com/shambhavi02006/Mindful-Journal.git
    cd Mindful-Journal
    ```
 
